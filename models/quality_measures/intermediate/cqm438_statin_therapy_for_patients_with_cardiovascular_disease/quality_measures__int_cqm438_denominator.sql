@@ -3,50 +3,7 @@
    )
 }}
 
-with patients_with_ascvd as (
-
-    select 
-          patient_id
-        , performance_period_begin
-        , performance_period_end
-        , measure_id
-        , measure_name
-        , measure_version
-        , 1 as criteria
-    from {{ ref('quality_measures__int_cqm438_denominator_criteria1') }}
-
-)
-
-, patients_with_cholesterol as (
-
-    select 
-          patient_id
-        , performance_period_begin
-        , performance_period_end
-        , measure_id
-        , measure_name
-        , measure_version
-        , 2 as criteria
-    from {{ ref('quality_measures__int_cqm438_denominator_criteria2') }}
-
-)
-
-, patients_with_diabetes as (
-
-    select 
-          patient_id
-        , performance_period_begin
-        , performance_period_end
-        , measure_id
-        , measure_name
-        , measure_version
-        , 3 as criteria
-    from {{ ref('quality_measures__int_cqm438_denominator_criteria3') }}
-
-)
-
-
-, visit_codes as (
+with visit_codes as (
 
     select
           value_sets.code
@@ -124,7 +81,7 @@ with patients_with_ascvd as (
 
 , encounters_by_patient as (
 
-    select patient_id,min(min_date) min_date, max(max_date) max_date,
+    select patient_id, min(min_date) min_date, max(max_date) max_date,
         concat(concat(
             coalesce(min(visit_enc),'')
             ,coalesce(min(proc_enc),''))
@@ -148,7 +105,119 @@ with patients_with_ascvd as (
 
 )
 
-, qualifying_patients_from_criteria1 as (
+, ascvd_codes as (
+
+    select
+          code
+        , code_system
+    from {{ ref('quality_measures__value_sets') }}
+    where lower(concept_name) in (
+              'atherosclerosis and peripheral arterial disease'
+            , 'myocardial infarction'
+            , 'pci'
+            , 'stable and unstable angina'
+            , 'atherosclerosis and peripheral arterial disease'
+            , 'cabg or pci procedure'
+            , 'cabg surgeries'
+            , 'cerebrovascular disease stroke or tia'
+            , 'ischemic heart disease or related diagnoses'
+        )
+
+)
+
+, conditions as (
+
+    select
+          patient_id
+        , claim_id
+        , encounter_id
+        , recorded_date
+        , source_code
+        , source_code_type
+        , normalized_code
+        , normalized_code_type
+    from {{ ref('quality_measures__stg_core__condition')}}
+
+)
+
+, ascvd_conditions as (
+
+    select
+          conditions.patient_id
+        , conditions.recorded_date as evidence_date
+    from conditions
+    inner join ascvd_codes
+        on conditions.source_code_type = ascvd_codes.code_system
+            and conditions.source_code = ascvd_codes.code
+
+)
+
+, procedures as (
+
+    select
+          patient_id
+        , procedure_date
+        , coalesce (
+              normalized_code_type
+            , case
+                when lower(source_code_type) = 'cpt' then 'hcpcs'
+                when lower(source_code_type) = 'snomed' then 'snomed-ct'
+                else lower(source_code_type)
+              end
+          ) as code_type
+        , coalesce (
+              normalized_code
+            , source_code
+          ) as code
+    from {{ ref('quality_measures__stg_core__procedure') }}
+
+)
+
+, ascvd_procedures as (
+
+    select
+          procedures.patient_id
+        , procedures.procedure_date as evidence_date
+    from procedures
+         inner join ascvd_codes
+             on procedures.code = ascvd_codes.code
+             and procedures.code_type = ascvd_codes.code_system
+
+)
+
+, historical_ascvd as (
+
+    select
+          ascvd_conditions.patient_id
+        , ascvd_conditions.evidence_date
+    from ascvd_conditions
+
+    union all
+
+    select
+          ascvd_procedures.patient_id
+        , ascvd_procedures.evidence_date
+    from ascvd_procedures
+
+)
+
+, patients_with_ascvd as (
+
+    select
+        distinct
+          historical_ascvd.patient_id
+        , pp.performance_period_begin
+        , pp.performance_period_end
+        , pp.measure_id
+        , pp.measure_name
+        , pp.measure_version
+    from historical_ascvd
+    inner join {{ref('quality_measures__int_cqm438__performance_period')}} pp
+    on evidence_date <= pp.performance_period_end
+
+)
+
+, qualifying_patients as (
 
     select
         distinct
@@ -167,60 +236,6 @@ with patients_with_ascvd as (
 
 )
 
-, qualifying_patients_from_criteria2 as (
-
-    select
-        distinct
-          patients_with_cholesterol.patient_id
-        , patients_with_age.age as age
-        , patients_with_cholesterol.performance_period_begin
-        , patients_with_cholesterol.performance_period_end
-        , patients_with_cholesterol.measure_id
-        , patients_with_cholesterol.measure_name
-        , patients_with_cholesterol.measure_version
-        , 1 as denominator_flag
-    from patients_with_cholesterol
-    left join patients_with_age
-    where age between 20 and 75
-
-)
-
-, qualifying_patients_from_criteria3 as (
-
-    select
-        distinct
-          patients_with_diabetes.patient_id
-        , patients_with_age.age as age
-        , patients_with_diabetes.performance_period_begin
-        , patients_with_diabetes.performance_period_end
-        , patients_with_diabetes.measure_id
-        , patients_with_diabetes.measure_name
-        , patients_with_diabetes.measure_version
-        , 1 as denominator_flag
-    from patients_with_diabetes
-    left join patients_with_age
-    on patients_with_diabetes.patient_id = patients_with_age.patient_id
-    where age between 40 and 75
-
-)
-
-, final_denominator as (
-    
-    select *
-    from qualifying_patients_from_criteria1
-
-    union
-
-    select *
-    from qualifying_patients_from_criteria2
-    
-    union
-
-    select *
-    from qualifying_patients_from_criteria3
-
-)
-
 , add_data_types as (
 
     select
@@ -232,7 +247,7 @@ with patients_with_ascvd as (
         , cast(measure_name as {{ dbt.type_string() }}) as measure_name
         , cast(measure_version as {{ dbt.type_string() }}) as measure_version
         , cast(denominator_flag as integer) as denominator_flag
-    from final_denominator
+    from qualifying_patients
 
 )
 
