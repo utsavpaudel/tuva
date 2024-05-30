@@ -30,6 +30,10 @@ with visit_codes as (
         , 'outpatient'
         , 'outpatient rehabilitation'
         , 'telehealth'
+        , 'nonacute inpatient'
+        , 'encounter inpatient'
+        , 'acute inpatient'
+        , 'emergency department'
      )
 
 )
