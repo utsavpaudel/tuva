@@ -1,8 +1,6 @@
 {{ config(
-     enabled = var('claims_enabled',var('clinical_enabled', False))
-     | as_bool
-   )
-}}
+    enabled = var('claims_enabled', False)
+) }}
 
 with patient as (
 

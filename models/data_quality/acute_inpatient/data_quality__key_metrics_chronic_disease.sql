@@ -1,8 +1,6 @@
 {{ config(
-     enabled = var('claims_enabled',var('clinical_enabled', False))
-     | as_bool
-   )
-}}
+    enabled = var('claims_enabled', False)
+) }}
 
 with tuva_chronic_disease as (
 
@@ -325,8 +323,5 @@ with tuva_chronic_disease as (
 select
       data_mart
     , table_name
-    , how to  as field_value
+    , field_value
 from final
-
-
-
