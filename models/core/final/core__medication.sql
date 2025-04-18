@@ -48,7 +48,7 @@ with source_mapping as (
         ) as atc_code
    , coalesce(
         meds.atc_description
-        , rxatc.atc_4_name
+        , rxatc.atc_3_name
         ) as atc_description
    , case
         when meds.atc_code is not null then 'manual'
