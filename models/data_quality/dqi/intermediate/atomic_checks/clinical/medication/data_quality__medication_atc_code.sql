@@ -20,7 +20,7 @@ select
     , cast(atc_code as {{ dbt.type_string() }}) as field_value
     , '{{ var('tuva_last_run') }}' as tuva_last_run
 from {{ ref('medication') }} as m
-left outer join {{ ref('terminology__rxnorm_to_atc') }} as term_1 on m.atc_code = term_1.atc_1_name
-left outer join {{ ref('terminology__rxnorm_to_atc') }} as term_2 on m.atc_code = term_2.atc_2_name
-left outer join {{ ref('terminology__rxnorm_to_atc') }} as term_3 on m.atc_code = term_3.atc_3_name
-left outer join {{ ref('terminology__rxnorm_to_atc') }} as term_4 on m.atc_code = term_4.atc_4_name
+left outer join {{ ref('terminology__rxnorm_to_atc') }} as term_1 on m.atc_code = term_1.atc_1_code
+left outer join {{ ref('terminology__rxnorm_to_atc') }} as term_2 on m.atc_code = term_2.atc_2_code
+left outer join {{ ref('terminology__rxnorm_to_atc') }} as term_3 on m.atc_code = term_3.atc_3_code
+left outer join {{ ref('terminology__rxnorm_to_atc') }} as term_4 on m.atc_code = term_4.atc_4_code
